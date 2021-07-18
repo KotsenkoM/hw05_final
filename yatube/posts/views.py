@@ -8,7 +8,7 @@ from .models import Group, Post, User, Follow
 
 
 def index(request):
-    post_list = Post.objects.all()
+    post_list = Post.objects.select_related('group')
     paginator = Paginator(post_list, settings.PAG_POSTS)
     page_number = request.GET.get('page')
     page = paginator.get_page(page_number)
@@ -102,8 +102,6 @@ def add_comment(request, username, post_id):
 
 
 def page_not_found(request, exception):
-    # Переменная exception содержит отладочную информацию,
-    # выводить её в шаблон пользователской страницы 404 мы не станем
     return render(request, 'misc/404.html', {'path': request.path}, status=404)
 
 
@@ -113,8 +111,6 @@ def server_error(request):
 
 @login_required
 def follow_index(request):
-    # информация о текущем пользователе доступна в переменной request.user
-    # ...
     post_list = Post.objects.filter(author__following__user=request.user)
     paginator = Paginator(post_list, settings.PAG_POSTS)
     page_number = request.GET.get('page')
@@ -131,18 +127,16 @@ def profile_follow(request, username):
     follower = request.user
     user_following = get_object_or_404(User, username=username)
     if follower != user_following:
-        Follow.objects.get_or_create(user=request.user, author=user_following)
-    return redirect('follow_index')
+        Follow.objects.get_or_create(user=follower, author=user_following)
+    return redirect('profile', username)
 
 
 @login_required
 def profile_unfollow(request, username):
     follower = request.user
     user_following = get_object_or_404(User, username=username)
-    follow_objects = Follow.objects.filter(
+    Follow.objects.filter(
         user=follower,
         author=user_following
-    )
-    if follow_objects.exists():
-        follow_objects.delete()
-    return redirect('follow_index')
+    ).delete()
+    return redirect('profile', username)

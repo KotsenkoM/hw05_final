@@ -2,7 +2,7 @@ from django import forms
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from ..models import Group, Post, User
+from ..models import Group, Post, User, Follow
 
 
 class PostPagesTests(TestCase):
@@ -14,6 +14,7 @@ class PostPagesTests(TestCase):
             slug='test-slug',
         )
         cls.user = User.objects.create_user(username='Тестовое имя')
+        cls.user2 = User.objects.create(username='User_2')
         cls.post = Post.objects.create(
             text='Тест',
             group=cls.group,
@@ -23,7 +24,9 @@ class PostPagesTests(TestCase):
     def setUp(self):
         self.guest_client = Client()
         self.authorized_client = Client()
+        self.authorized_user2 = Client()
         self.authorized_client.force_login(self.user)
+        self.authorized_user2.force_login(self.user2)
 
     def test_urls_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
@@ -93,6 +96,27 @@ class PostPagesTests(TestCase):
             reverse('group', kwargs={'slug': self.group.slug})
         )
         self.assertEqual(len(response.context['page']), 1)
+
+    def test_user_follow(self):
+        """Подписка на автора работает правильно."""
+        Follow.objects.get_or_create(user=self.user2, author=self.user)
+        self.authorized_client.get(
+            reverse('profile_follow',
+                    kwargs={'username': self.user}))
+        follow = Follow.objects.first()
+        count = Follow.objects.count()
+        self.assertEqual(count, 1)
+        self.assertEqual(follow.user, self.user2)
+        self.assertEqual(follow.author, self.user)
+
+    def test_user_unfollow(self):
+        """Отписка от других пользователей работает правильно."""
+        Follow.objects.create(user=self.user2, author=self.user)
+        self.authorized_client.get(
+            reverse('profile_unfollow',
+                    kwargs={'username': self.user}))
+        count = Follow.objects.count()
+        self.assertEqual(count, 1)
 
 
 class PaginatorViewsTest(TestCase):
